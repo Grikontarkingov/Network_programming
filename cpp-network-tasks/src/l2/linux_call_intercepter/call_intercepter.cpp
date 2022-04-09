@@ -15,7 +15,6 @@ extern "C"
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <fstream>
 
 
 static void init (void) __attribute__ ((constructor));
@@ -59,33 +58,26 @@ int close(int fd)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-
     auto char_buf = reinterpret_cast<const char*>(buf);
 
     if (char_buf && (count > 1) && (fd == socket_fd))
     {
-        std::ofstream out("intercepter.txt");
         printf("> write() on the socket was called with a string!\n");
         printf("New buffer = [");
 
         for (size_t i = 0; i < count - 1; ++i)
         {
+            int r = rand();
             char *c = const_cast<char *>(char_buf) + i;
 
+            // ASCII symbol.
+            if (1 == r % count) *c = r % (0x7f - 0x20) + 0x20;
+
             putchar(*c);
-            if(out.is_open())
-            {
-                out << *c;
-            }
         }
         printf("]\n");
-        if(out.is_open())
-        {
-            out << "\n";
-        }
-
-        out.close();
     }
+
     return old_write(fd, buf, count);
 }
 
