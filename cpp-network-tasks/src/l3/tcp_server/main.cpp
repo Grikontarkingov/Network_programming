@@ -53,7 +53,7 @@ int main(int argc, char const *argv[])
     char buffer[256];
 
     // socket address used to store client address
-    struct sockaddr_in client_addr = {0};
+    struct sockaddr_storage client_addr = {0};
     socklen_t client_len = sizeof(client_addr);
     ssize_t recv_len = 0;
 
@@ -80,8 +80,8 @@ int main(int argc, char const *argv[])
                 buffer[recv_len] = '\0';
                 std::cout
                         << "Client with address "
-                        << inet_ntop(AF_INET, &client_addr.sin_addr, client_address_buf, sizeof(client_address_buf) / sizeof(client_address_buf[0]))
-                        << ":" << ntohs(client_addr.sin_port)
+                        << inet_ntop(AF_INET, &(reinterpret_cast<const sockaddr_in* const> (&client_addr)->sin_addr), client_address_buf, sizeof(client_address_buf) / sizeof(client_address_buf[0]))
+                        << ":" << ntohs((reinterpret_cast<const sockaddr_in* const>(&client_addr)->sin_port))
                         << " sent datagram "
                         << "[length = "
                         << recv_len
