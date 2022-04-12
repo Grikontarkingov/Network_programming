@@ -23,7 +23,7 @@ int main(int argc, char const *argv[])
     const int port { std::stoi(argv[1]) };
 
     socket_wrapper::Socket sock = {AF_INET, SOCK_STREAM, IPPROTO_TCP};
-    socket_wrapper::Socket newsock = {0};
+    int newsock = {0};
 
     std::cout << "Starting echo server on the port " << port << "...\n";
 
