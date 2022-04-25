@@ -29,7 +29,7 @@ public:
 
     void start()
     {
-        read();
+        send();
     }
 
 
@@ -102,7 +102,6 @@ private:
         std::array<char, MAX_PATH + 1> buffer;
         size_t recv_bytes = 0;
         const auto size = buffer.size() - 1;
-        boost::system::error_code ec;
         auto s = shared_from_this();
 
         std::cout << "Reading user request..." << std::endl;
@@ -112,7 +111,6 @@ private:
                                     s->handle_read(error, bytes_transfered);
                                 }
         );
-
 
         buffer[recv_bytes] = '\0';
 
@@ -124,10 +122,12 @@ private:
 
     void handle_read(const boost::system::error_code& error, size_t bytes_read)
     {
-        if(!error)
+        if(!error && bytes_read)
         {
-            send();
+            std::cout << "Bytes receive = " << bytes_read << std::endl;
         }
+
+        send();
     }
 
 private:
