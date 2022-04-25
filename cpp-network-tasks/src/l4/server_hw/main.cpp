@@ -53,21 +53,23 @@ private:
         return true;
     }
 
-    void handle_write(const boost::system::error_code& error, size_t bytes_transfered)
-    {
-        if(!error)
-        {
-            std::cout << "Bytes transfered: " << bytes_transfered << std::endl;
-        }
-    }
-
     void send()
     {
         auto s = shared_from_this();
         std::vector<char> buffer(buffer_size);
         auto path = read();
 
-        send_file_offset(path, buffer);
+        if(path.empty())
+        {
+            std::cout << "Path is not set" << std::endl;
+            return;
+        }
+
+        if(!send_file_offset(path, buffer))
+        {
+            std::cout << "File not found" << std::endl;
+            return;
+        }
 
         const size_t offset = 20;
         size_t pos = 0;
@@ -97,6 +99,14 @@ private:
         }
     }
 
+    void handle_write(const boost::system::error_code& error, size_t bytes_transfered)
+    {
+        if(!error)
+        {
+            std::cout << "Bytes transfered: " << bytes_transfered << std::endl;
+        }
+    }
+
     std::string read()
     {
         std::array<char, MAX_PATH + 1> buffer;
@@ -122,12 +132,10 @@ private:
 
     void handle_read(const boost::system::error_code& error, size_t bytes_read)
     {
-        if(!error && bytes_read)
+        if(!error)
         {
             std::cout << "Bytes receive = " << bytes_read << std::endl;
         }
-
-        send();
     }
 
 private:
