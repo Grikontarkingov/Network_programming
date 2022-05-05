@@ -3,7 +3,6 @@
 #include <string>
 #include <boost/system/error_code.hpp>
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
 #include <fstream>
 
 #if !defined(MAX_PATH)
@@ -29,7 +28,7 @@ public:
 
     void start()
     {
-        send();
+        read();
     }
 
 
@@ -53,49 +52,39 @@ private:
         return true;
     }
 
-    void send()
+    void send(const std::string& file_path)
     {
         auto s = shared_from_this();
         std::vector<char> buffer(buffer_size);
-        auto path = read();
 
-        if(path.empty())
+        if(send_file_offset(file_path, buffer))
         {
-            std::cout << "Path is not set" << std::endl;
-            return;
-        }
+            const size_t offset = 20;
+            size_t pos = 0;
 
-        if(!send_file_offset(path, buffer))
-        {
-            std::cout << "File not found" << std::endl;
-            return;
-        }
+            const auto size = buffer.size();
+            std::string transfer;
 
-        const size_t offset = 20;
-        size_t pos = 0;
+            while(pos != size) {
+                transfer = &(buffer.data()[0]) + pos;
+                boost::asio::async_write(socket_, boost::asio::buffer(transfer),
+                                         [s](const boost::system::error_code& error, size_t bytes_transfered)
+                                         {
+                                             s->handle_write(error, bytes_transfered);
+                                         }
+                );
 
-        const auto size = buffer.size();
-        std::string transfer;
+                if (pos + offset > size)
+                {
+                    pos += (size - pos);
+                }
+                else
+                {
+                    pos += offset;
+                }
 
-        while(pos != size) {
-            transfer = &(buffer.data()[0]) + pos;
-            boost::asio::async_write(socket_, boost::asio::buffer(transfer),
-                                     [s](const boost::system::error_code& error, size_t bytes_transfered)
-                                     {
-                                         s->handle_write(error, bytes_transfered);
-                                     }
-            );
-
-            if (pos + offset > size)
-            {
-                pos += (size - pos);
+                transfer.clear();
             }
-            else
-            {
-                pos += offset;
-            }
-
-            transfer.clear();
         }
     }
 
@@ -107,40 +96,38 @@ private:
         }
     }
 
-    std::string read()
+    void read()
     {
-        std::array<char, MAX_PATH + 1> buffer;
-        size_t recv_bytes = 0;
-        const auto size = buffer.size() - 1;
+        buffer_.resize(7);
         auto s = shared_from_this();
 
         std::cout << "Reading user request..." << std::endl;
-        socket_.async_read_some(boost::asio::buffer(buffer, size),
-                                [s](const boost::system::error_code& error, size_t bytes_transfered)
-                                {
+        boost::asio::async_read(socket_, boost::asio::buffer(&buffer_[0], buffer_.size()),
+                                 [s](const boost::system::error_code& error, size_t bytes_transfered)
+                                 {
                                     s->handle_read(error, bytes_transfered);
-                                }
+
+                                    s->buffer_[bytes_transfered] = '\0';
+                                    auto result = std::string(s->buffer_.begin(), s->buffer_.begin() + bytes_transfered);
+                                    
+                                    s->send(result);
+                                 }
         );
-
-        buffer[recv_bytes] = '\0';
-
-        auto result = std::string(buffer.begin(), buffer.begin() + recv_bytes);
-        std::cout << "Request = \"" << result << "\"" << std::endl;
-
-        return result;
     }
 
-    void handle_read(const boost::system::error_code& error, size_t bytes_read)
+    void handle_read(const boost::system::error_code& error, size_t bytes_transfered)
     {
         if(!error)
         {
-            std::cout << "Bytes receive = " << bytes_read << std::endl;
+            std::cout << "Bytes receive = " << bytes_transfered << std::endl;
+            return;
         }
     }
 
 private:
+    std::string buffer_;
     tcp::socket socket_;
-    const size_t buffer_size = 4096;
+    const size_t buffer_size = 128;
 };
 
 class TcpServer
@@ -157,11 +144,10 @@ public:
 private:
     void start_accept()
     {
-        TcpConnection::pointer new_connection =
-                TcpConnection::create(io_context_);
+        TcpConnection::pointer new_connection = TcpConnection::create(io_context_);
 
         acceptor_.async_accept(new_connection->socket(),
-                               [this, new_connection](const boost::system::error_code& error)
+                               [this, new_connection] (const boost::system::error_code& error)
                                {
                                     this->handle_accept(new_connection, error);
                                }
