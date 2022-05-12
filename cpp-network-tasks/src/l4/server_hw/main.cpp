@@ -36,55 +36,39 @@ private:
     TcpConnection(boost::asio::io_context& io_context)
         : socket_(io_context) {}
 
-
-    bool send_file_offset(const std::string& file_path, std::vector<char>& buffer)
-    {
-        std::ifstream file_stream(file_path, std::ifstream::binary);
-
-        if (!file_stream) return false;
-
-        std::cout << "Sending file " << file_path << "..." << std::endl;
-        while (file_stream)
-        {
-            file_stream.read(&buffer[0], buffer.size());
-        }
-
-        return true;
-    }
-
-    void send(const std::string& file_path)
+    void send()
     {
         auto s = shared_from_this();
-        std::vector<char> buffer(buffer_size);
+        buffer_.resize(buffer_size);
 
-        if(send_file_offset(file_path, buffer))
+        std::ifstream file_stream(file_path_buffer, std::ifstream::binary);
+
+        if (!file_stream)
         {
-            const size_t offset = 20;
-            size_t pos = 0;
+            std::cerr << "File not found" << std::endl;
+            return;
+        }
 
-            const auto size = buffer.size();
-            std::string transfer;
+        std::cout << "Sending file " << file_path_buffer << "..." << std::endl;
 
-            while(pos != size) {
-                transfer = &(buffer.data()[0]) + pos;
-                boost::asio::async_write(socket_, boost::asio::buffer(transfer),
-                                         [s](const boost::system::error_code& error, size_t bytes_transfered)
-                                         {
-                                             s->handle_write(error, bytes_transfered);
-                                         }
-                );
+        while(file_stream)
+        {
+            file_stream.read(&buffer_[0], buffer_.size());
+        }
 
-                if (pos + offset > size)
-                {
-                    pos += (size - pos);
-                }
-                else
-                {
-                    pos += offset;
-                }
+        const uint16_t offset = 2;
+        size_t transfer = 0;
 
-                transfer.clear();
-            }
+        while(transfer < buffer_.size())
+        {
+            boost::asio::async_write(socket_, boost::asio::buffer(&buffer_[0] + transfer, offset),
+                                     [s](const boost::system::error_code& error, size_t bytes_transfered)
+                                     {
+                                         s->handle_write(error, bytes_transfered);
+                                     }
+            );
+
+            transfer += offset;
         }
     }
 
@@ -98,19 +82,16 @@ private:
 
     void read()
     {
-        buffer_.resize(7);
+        file_path_buffer.resize(9);
         auto s = shared_from_this();
 
         std::cout << "Reading user request..." << std::endl;
-        boost::asio::async_read(socket_, boost::asio::buffer(&buffer_[0], buffer_.size()),
+        boost::asio::async_read(socket_, boost::asio::buffer(&file_path_buffer[0], file_path_buffer.size()),
                                  [s](const boost::system::error_code& error, size_t bytes_transfered)
                                  {
+                                    std::cout << "Request = \"" << s->file_path_buffer << "\"" << std::endl;
                                     s->handle_read(error, bytes_transfered);
-
-                                    s->buffer_[bytes_transfered] = '\0';
-                                    auto result = std::string(s->buffer_.begin(), s->buffer_.begin() + bytes_transfered);
-                                    
-                                    s->send(result);
+                                    s->send();
                                  }
         );
     }
@@ -125,7 +106,8 @@ private:
     }
 
 private:
-    std::string buffer_;
+    std::string file_path_buffer;
+    std::vector<char> buffer_;
     tcp::socket socket_;
     const size_t buffer_size = 128;
 };
